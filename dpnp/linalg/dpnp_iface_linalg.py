@@ -52,6 +52,7 @@ from .dpnp_utils_linalg import (
     _assert_stacked_square,
     _assert_supported_array_type,
     dpnp_eigh,
+    dpnp_inv,
     dpnp_solve,
 )
 
@@ -289,30 +290,50 @@ def eigvals(input):
     return call_origin(numpy.linalg.eigvals, input)
 
 
-def inv(input):
+def inv(a):
     """
-    Divide arguments element-wise.
+    Compute the (multiplicative) inverse of a matrix.
+
+    Given a square matrix a, return the matrix ainv
+    satisfying ``dot(a, ainv) = dot(ainv, a) = eye(a.shape[0])``.
 
     For full documentation refer to :obj:`numpy.linalg.inv`.
 
+    Returns
+    -------
+    out : (..., M, M) dpnp.ndarray
+        (Multiplicative) inverse of the matrix a.
+
     Limitations
     -----------
-        Input array is supported as :obj:`dpnp.ndarray`.
-        Dimension of input array is supported to be equal to ``2``.
-        Shape of input array is limited by ``input.shape[0] == input.shape[1]``, ``input.shape[0] >= 2``.
-        Otherwise the function will be executed sequentially on CPU.
+    Parameters `a` is supported as either :class:`dpnp.ndarray`
+    or :class:`dpctl.tensor.usm_ndarray`.
+    Input array data types are limited by supported DPNP :ref:`Data types`.
+
+    See Also
+    --------
+    :obj:`scipy.linalg.inv` : Similar function in SciPy.
+
+    Examples
+    --------
+    >>> import dpnp as dp
+    >>> a = dp.array([[1, 2], [3, 5]])
+    >>> b = dp.array([1, 2])
+    >>> x = dp.linalg.solve(a, b)
+    >>> x
+    array([-1.,  1.])
+
     """
 
-    x1_desc = dpnp.get_dpnp_descriptor(input, copy_when_nondefault_queue=False)
-    if x1_desc:
-        if (
-            x1_desc.ndim == 2
-            and x1_desc.shape[0] == x1_desc.shape[1]
-            and x1_desc.shape[0] >= 2
-        ):
-            return dpnp_inv(x1_desc).get_pyobj()
+    _assert_supported_array_type(a)
+    _assert_stacked_2d(a)
+    _assert_stacked_square(a)
 
-    return call_origin(numpy.linalg.inv, input)
+    if a.ndim >= 3:
+        pass
+        # return _batched_inv()
+
+    return dpnp_inv(a)
 
 
 def matrix_power(input, count):

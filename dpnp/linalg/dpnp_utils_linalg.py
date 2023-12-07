@@ -280,6 +280,128 @@ def dpnp_eigh(a, UPLO):
         return w, out_v
 
 
+def dpnp_inv(a):
+    """
+    dpnp_inv(a)
+
+    Return the inverse of `a` matrix.
+
+    The inverse of a matrix is such that if it is multiplied by the original matrix,
+    it results in identity matrix.
+
+    """
+
+    a_usm_arr = dpnp.get_usm_ndarray(a)
+
+    a_order = "C" if a.flags.c_contiguous else "F"
+    a_shape = a.shape
+
+    res_type = _common_type(a)
+    if a.size == 0:
+        return dpnp.empty_like(a, dtype=res_type, usm_type=a.usm_type)
+
+    # if a.ndim > 2:
+    #     reshape = False
+    #     orig_shape_b = b_shape
+    #     if a.ndim > 3:
+    #         # get 3d input arrays by reshape
+    #         if a.ndim == b.ndim:
+    #             b = b.reshape(-1, b_shape[-2], b_shape[-1])
+    #         else:
+    #             b = b.reshape(-1, b_shape[-1])
+
+    #         a = a.reshape(-1, a_shape[-2], a_shape[-1])
+
+    #         a_usm_arr = dpnp.get_usm_ndarray(a)
+    #         b_usm_arr = dpnp.get_usm_ndarray(b)
+    #         reshape = True
+
+    #     batch_size = a.shape[0]
+
+    #     coeff_vecs = [None] * batch_size
+    #     val_vecs = [None] * batch_size
+    #     a_ht_copy_ev = [None] * batch_size
+    #     b_ht_copy_ev = [None] * batch_size
+    #     ht_lapack_ev = [None] * batch_size
+
+    #     for i in range(batch_size):
+    #         # oneMKL LAPACK assumes fortran-like array as input, so
+    #         # allocate a memory with 'F' order for dpnp array of coefficient matrix
+    #         # and multiple dependent variables array
+    #         coeff_vecs[i] = dpnp.empty_like(
+    #             a[i], order="F", dtype=res_type, usm_type=res_usm_type
+    #         )
+    #         val_vecs[i] = dpnp.empty_like(
+    #             b[i], order="F", dtype=res_type, usm_type=res_usm_type
+    #         )
+
+    #         # use DPCTL tensor function to fill the coefficient matrix array
+    #         # and the array of multiple dependent variables with content
+    #         # from the input arrays
+    #         a_ht_copy_ev[i], a_copy_ev = ti._copy_usm_ndarray_into_usm_ndarray(
+    #             src=a_usm_arr[i],
+    #             dst=coeff_vecs[i].get_array(),
+    #             sycl_queue=a.sycl_queue,
+    #         )
+    #         b_ht_copy_ev[i], b_copy_ev = ti._copy_usm_ndarray_into_usm_ndarray(
+    #             src=b_usm_arr[i],
+    #             dst=val_vecs[i].get_array(),
+    #             sycl_queue=b.sycl_queue,
+    #         )
+
+    #         # Call the LAPACK extension function _gesv to solve the system of linear
+    #         # equations using a portion of the coefficient square matrix and a
+    #         # corresponding portion of the dependent variables array.
+    #         ht_lapack_ev[i], _ = li._gesv(
+    #             exec_q,
+    #             coeff_vecs[i].get_array(),
+    #             val_vecs[i].get_array(),
+    #             depends=[a_copy_ev, b_copy_ev],
+    #         )
+
+    #     for i in range(batch_size):
+    #         ht_lapack_ev[i].wait()
+    #         b_ht_copy_ev[i].wait()
+    #         a_ht_copy_ev[i].wait()
+
+    #     # combine the list of solutions into a single array
+    #     out_v = dpnp.array(val_vecs, order=b_order, usm_type=res_usm_type)
+    #     if reshape:
+    #         # shape of the out_v must be equal to the shape of the array of
+    #         # dependent variables
+    #         out_v = out_v.reshape(orig_shape_b)
+    #     return out_v
+    # else:
+
+    # oneMKL LAPACK gesv overwrites `a` and assumes fortran-like array as input.
+    # Allocate 'F' order memory for dpnp arrays to comply with these requirements.
+    a_f = dpnp.empty_like(
+        a, order=a_order, dtype=res_type, usm_type=a.usm_type
+    )
+
+    # use DPCTL tensor function to fill the coefficient matrix array
+    # with content from the input array `a`
+    a_ht_copy_ev, a_copy_ev = ti._copy_usm_ndarray_into_usm_ndarray(
+        src=a_usm_arr, dst=a_f.get_array(), sycl_queue=a.sycl_queue
+    )
+
+    b_f = dpnp.eye(a_shape[0], dtype=res_type, order=a_order, sycl_queue=a.sycl_queue)
+
+    if a_order == "F":
+        ht_lapack_ev, _ = li._gesv(
+            a.sycl_queue, a_f.get_array(), b_f.get_array(), [a_copy_ev]
+        )
+    else:
+        ht_lapack_ev, _ = li._gesv(
+            a.sycl_queue, a_f.T.get_array(), b_f.T.get_array(), [a_copy_ev]
+        )
+
+    ht_lapack_ev.wait()
+    a_ht_copy_ev.wait()
+
+    return b_f
+
+
 def dpnp_solve(a, b):
     """
     dpnp_solve(a, b)
