@@ -312,12 +312,23 @@ def inv(a):
 
     Examples
     --------
-    >>> import dpnp as dp
-    >>> a = dp.array([[1, 2], [3, 5]])
-    >>> b = dp.array([1, 2])
-    >>> x = dp.linalg.solve(a, b)
-    >>> x
-    array([-1.,  1.])
+    >>> import dpnp as np
+    >>> a = np.array([[1., 2.], [3., 4.]])
+    >>> ainv = np.linalg.inv(a)
+    >>> np.allclose(np.dot(a, ainv), np.eye(2))
+    array([ True])
+    >>> np.allclose(np.dot(ainv, a), np.eye(2))
+    array([ True])
+
+    Inverses of several matrices can be computed at once:
+
+    >>> a = np.array([[[1., 2.], [3., 4.]], [[1, 3], [3, 5]]])
+    >>> np.linalg.inv(a)
+    array([[[-2.  ,  1.  ],
+            [ 1.5 , -0.5 ]],
+
+           [[-1.25,  0.75],
+            [ 0.75, -0.25]]])
 
     """
 
