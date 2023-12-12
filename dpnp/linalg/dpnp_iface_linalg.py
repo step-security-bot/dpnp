@@ -321,13 +321,9 @@ def inv(a):
 
     """
 
-    _assert_supported_array_type(a)
-    _assert_stacked_2d(a)
-    _assert_stacked_square(a)
-
-    if a.ndim >= 3:
-        pass
-        # return _batched_inv()
+    dpnp.check_supported_arrays_type(a)
+    check_stacked_2d(a)
+    check_stacked_square(a)
 
     return dpnp_inv(a)
 
