@@ -112,29 +112,32 @@ class TestInv(unittest.TestCase):
         self.check_x((3, 3))
         self.check_x((4, 4))
         self.check_x((5, 5))
-        # self.check_x((2, 5, 5))
-        # self.check_x((3, 4, 4))
-        # self.check_x((4, 2, 3, 3))
+        self.check_x((2, 5, 5))
+        self.check_x((3, 4, 4))
+        self.check_x((4, 2, 3, 3))
         self.check_x((0, 0))
-        # self.check_x((3, 0, 0))
-        # self.check_x((2, 0, 3, 4, 4))
+        self.check_x((3, 0, 0))
+        self.check_x((2, 0, 3, 4, 4))
 
 
-# class TestInvInvalid(unittest.TestCase):
+class TestInvInvalid(unittest.TestCase):
+    @testing.for_dtypes("ifdFD")
+    def test_inv(self, dtype):
+        for xp in (numpy, cupy):
+            a = xp.array([[1, 2], [2, 4]]).astype(dtype)
+            with pytest.raises(
+                (numpy.linalg.LinAlgError, cupy.linalg.LinAlgError)
+            ):
+                xp.linalg.inv(a)
 
-#     @testing.for_dtypes('ifdFD')
-#     def test_inv(self, dtype):
-#         for xp in (numpy, cupy):
-#             a = xp.array([[1, 2], [2, 4]]).astype(dtype)
-#             with cupyx.errstate(linalg='raise'):
-#                 with pytest.raises(numpy.linalg.LinAlgError):
-#                     xp.linalg.inv(a)
-
-#     @testing.for_dtypes('ifdFD')
-#     def test_batched_inv(self, dtype):
-#         for xp in (numpy, cupy):
-#             a = xp.array([[[1, 2], [2, 4]]]).astype(dtype)
-#             assert a.ndim >= 3  # CuPy internally uses a batched function.
-#             with cupyx.errstate(linalg='raise'):
-#                 with pytest.raises(numpy.linalg.LinAlgError):
-#                     xp.linalg.inv(a)
+    # TODO: remove skip when MKLD-16626 is resolved
+    @pytest.mark.skip("MKLD-16626")
+    @testing.for_dtypes("ifdFD")
+    def test_batched_inv(self, dtype):
+        for xp in (numpy, cupy):
+            a = xp.array([[[1, 2], [2, 4]]]).astype(dtype)
+            assert a.ndim >= 3  # CuPy internally uses a batched function.
+            with pytest.raises(
+                (numpy.linalg.LinAlgError, cupy.linalg.LinAlgError)
+            ):
+                xp.linalg.inv(a)
