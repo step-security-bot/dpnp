@@ -39,6 +39,7 @@ __all__ = [
     "check_stacked_square",
     "dpnp_eigh",
     "dpnp_solve",
+    "dpnp_qr",
 ]
 
 _jobz = {"N": 0, "V": 1}
@@ -432,3 +433,116 @@ def dpnp_solve(a, b):
         a_ht_copy_ev.wait()
 
         return b_f
+
+
+def dpnp_qr(a, mode="reduced"):
+    """
+    dpnp_qr(a, mode="reduced")
+
+    Return the qr factorization of `a` matrix.
+
+    """
+
+    if a.ndim > 2:
+        pass
+
+    a_usm_arr = dpnp.get_usm_ndarray(a)
+    a_sycl_queue = a.sycl_queue
+    a_usm_type = a.usm_type
+
+    res_type = _common_type(a)
+
+    m, n = a.shape
+    k = min(m, n)
+    if k == 0:
+        if mode == "reduced":
+            return dpnp.empty(
+                (m, 0),
+                dtype=res_type,
+                sycl_queue=a_sycl_queue,
+                usm_type=a_usm_type,
+            ), dpnp.empty(
+                (0, n),
+                dtype=res_type,
+                sycl_queue=a_sycl_queue,
+                usm_type=a_usm_type,
+            )
+        elif mode == "complete":
+            return dpnp.identity(
+                m, dtype=res_type, sycl_queue=a_sycl_queue, usm_type=a_usm_type
+            ), dpnp.empty(
+                (m, n),
+                dtype=res_type,
+                sycl_queue=a_sycl_queue,
+                usm_type=a_usm_type,
+            )
+        elif mode == "r":
+            return dpnp.empty(
+                (0, n),
+                dtype=res_type,
+                sycl_queue=a_sycl_queue,
+                usm_type=a_usm_type,
+            )
+        else:  # mode == "raw"
+            return dpnp.empty(
+                (n, m),
+                dtype=res_type,
+                sycl_queue=a_sycl_queue,
+                usm_type=a_usm_type,
+            ), dpnp.empty(
+                (0,),
+                dtype=res_type,
+                sycl_queue=a_sycl_queue,
+                usm_type=a_usm_type,
+            )
+
+    a_t = dpnp.empty_like(a.T, order="C", dtype=res_type, usm_type=a_usm_type)
+
+    # use DPCTL tensor function to fill the matrix array
+    # with content from the input array `a`
+    a_ht_copy_ev, a_copy_ev = ti._copy_usm_ndarray_into_usm_ndarray(
+        src=a_usm_arr, dst=a_t.T.get_array(), sycl_queue=a_sycl_queue
+    )
+
+    tau_h = dpnp.empty(
+        k, dtype=res_type, sycl_queue=a_sycl_queue, usm_type=a_usm_type
+    )
+
+    # Call the LAPACK extension function _geqrf to compute the QR factorization
+    # of a general m x n matrix.
+    ht_lapack_ev, _ = li._geqrf(
+        a_sycl_queue, m, n, a_t.get_array(), tau_h.get_array(), [a_copy_ev]
+    )
+
+    ht_lapack_ev.wait()
+    a_ht_copy_ev.wait()
+
+    if mode == "r":
+        r = a_t[:, :k].transpose()
+        return dpnp.triu(r).astype(res_type, copy=False)
+
+    if mode == "raw":
+        return (
+            a_t.astype(res_type, copy=False),
+            tau_h.astype(res_type, copy=False),
+        )
+
+    # if mode == "complete" and m > n:
+    #     mc = m
+    #     q = dpnp.empty((m, m), dtype=res_type)
+    # else:
+    #     mc = k
+    #     q = dpnp.empty((n, m), dtype=res_type)
+    # q[:n] = a_t
+
+    # # Call the LAPACK extension function _orgqr to generate the real orthogonal matrix
+    # # `Q` of the QR factorization
+    # ht_lapack_ev, _ = li._orgqr(
+    #     a_sycl_queue, m, mc, k, q.get_array(), tau_h.get_array(), []
+    # )
+
+    # q = q[:mc].transpose()
+    # r = a_t[:, :mc].transpose()
+    # return (
+    #     q.astype(dtype=res_type, copy=False),
+    #     dpnp.triu(r).astype(dtype=res_type, copy=False))

@@ -51,6 +51,7 @@ from .dpnp_utils_linalg import (
     check_stacked_2d,
     check_stacked_square,
     dpnp_eigh,
+    dpnp_qr,
     dpnp_solve,
 )
 
@@ -475,7 +476,7 @@ def norm(x1, ord=None, axis=None, keepdims=False):
     return call_origin(numpy.linalg.norm, x1, ord, axis, keepdims)
 
 
-def qr(x1, mode="reduced"):
+def qr(a, mode="reduced"):
     """
     Compute the qr factorization of a matrix.
 
@@ -491,18 +492,13 @@ def qr(x1, mode="reduced"):
 
     """
 
-    x1_desc = dpnp.get_dpnp_descriptor(x1, copy_when_nondefault_queue=False)
-    if x1_desc:
-        if x1_desc.ndim != 2:
-            pass
-        elif mode != "reduced":
-            pass
-        else:
-            result_tup = dpnp_qr(x1_desc, mode)
+    dpnp.check_supported_arrays_type(a)
+    check_stacked_2d(a)
 
-            return result_tup
+    if mode not in ("reduced", "complete", "r", "raw"):
+        raise ValueError(f"Unrecognized mode {mode}")
 
-    return call_origin(numpy.linalg.qr, x1, mode)
+    return dpnp_qr(a, mode)
 
 
 def solve(a, b):

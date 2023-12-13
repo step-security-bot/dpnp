@@ -30,6 +30,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include "geqrf.hpp"
 #include "gesv.hpp"
 #include "heevd.hpp"
 #include "linalg_exceptions.hpp"
@@ -42,6 +43,7 @@ namespace py = pybind11;
 void init_dispatch_vectors(void)
 {
     lapack_ext::init_gesv_dispatch_vector();
+    lapack_ext::init_geqrf_dispatch_vector();
     lapack_ext::init_syevd_dispatch_vector();
 }
 
@@ -67,6 +69,12 @@ PYBIND11_MODULE(_lapack_impl, m)
           "a square coefficient matrix A and multiple dependent variables",
           py::arg("sycl_queue"), py::arg("coeff_matrix"),
           py::arg("dependent_vals"), py::arg("depends") = py::list());
+
+    m.def("_geqrf", &lapack_ext::geqrf,
+          "Call `geqrf` from OneMKL LAPACK library to return "
+          "the QR factorization of a general m x n matrix ",
+          py::arg("sycl_queue"), py::arg("m"), py::arg("n"), py::arg("a_array"),
+          py::arg("tau_array"), py::arg("depends") = py::list());
 
     m.def("_heevd", &lapack_ext::heevd,
           "Call `heevd` from OneMKL LAPACK library to return "
