@@ -34,6 +34,7 @@
 #include "gesv.hpp"
 #include "heevd.hpp"
 #include "linalg_exceptions.hpp"
+#include "orgqr.hpp"
 #include "syevd.hpp"
 
 namespace lapack_ext = dpnp::backend::ext::lapack;
@@ -44,6 +45,7 @@ void init_dispatch_vectors(void)
 {
     lapack_ext::init_gesv_dispatch_vector();
     lapack_ext::init_geqrf_dispatch_vector();
+    lapack_ext::init_orgqr_dispatch_vector();
     lapack_ext::init_syevd_dispatch_vector();
 }
 
@@ -81,6 +83,13 @@ PYBIND11_MODULE(_lapack_impl, m)
           "the eigenvalues and eigenvectors of a complex Hermitian matrix",
           py::arg("sycl_queue"), py::arg("jobz"), py::arg("upper_lower"),
           py::arg("eig_vecs"), py::arg("eig_vals"),
+          py::arg("depends") = py::list());
+
+    m.def("_orgqr", &lapack_ext::orgqr,
+          "Call `geqrf` from OneMKL LAPACK library to return "
+          "the real orthogonal matrix Q of the QR factorization",
+          py::arg("sycl_queue"), py::arg("m"), py::arg("n"), py::arg("k"),
+          py::arg("a_array"), py::arg("tau_array"),
           py::arg("depends") = py::list());
 
     m.def("_syevd", &lapack_ext::syevd,

@@ -504,13 +504,15 @@ def dpnp_qr(a, mode="reduced"):
         src=a_usm_arr, dst=a_t.T.get_array(), sycl_queue=a_sycl_queue
     )
 
+    dtype = dpnp.default_float_type(a.sycl_device)
+
     tau_h = dpnp.empty(
-        k, dtype=res_type, sycl_queue=a_sycl_queue, usm_type=a_usm_type
+        k, dtype=dtype, sycl_queue=a_sycl_queue, usm_type=a_usm_type
     )
 
     # Call the LAPACK extension function _geqrf to compute the QR factorization
     # of a general m x n matrix.
-    ht_lapack_ev, _ = li._geqrf(
+    ht_lapack_ev, geqrf_ev = li._geqrf(
         a_sycl_queue, m, n, a_t.get_array(), tau_h.get_array(), [a_copy_ev]
     )
 
@@ -527,22 +529,23 @@ def dpnp_qr(a, mode="reduced"):
             tau_h.astype(res_type, copy=False),
         )
 
-    # if mode == "complete" and m > n:
-    #     mc = m
-    #     q = dpnp.empty((m, m), dtype=res_type)
-    # else:
-    #     mc = k
-    #     q = dpnp.empty((n, m), dtype=res_type)
-    # q[:n] = a_t
+    if mode == "complete" and m > n:
+        mc = m
+        q = dpnp.empty((m, m), dtype=dtype)
+    else:
+        mc = k
+        q = dpnp.empty((n, m), dtype=dtype)
+    q[:n] = a_t
 
-    # # Call the LAPACK extension function _orgqr to generate the real orthogonal matrix
-    # # `Q` of the QR factorization
-    # ht_lapack_ev, _ = li._orgqr(
-    #     a_sycl_queue, m, mc, k, q.get_array(), tau_h.get_array(), []
-    # )
+    # Call the LAPACK extension function _orgqr to generate the real orthogonal matrix
+    # `Q` of the QR factorization
+    ht_lapack_ev, _ = li._orgqr(
+        a_sycl_queue, m, mc, k, q.get_array(), tau_h.get_array(), [geqrf_ev]
+    )
 
-    # q = q[:mc].transpose()
-    # r = a_t[:, :mc].transpose()
-    # return (
-    #     q.astype(dtype=res_type, copy=False),
-    #     dpnp.triu(r).astype(dtype=res_type, copy=False))
+    q = q[:mc].transpose()
+    r = a_t[:, :mc].transpose()
+    return (
+        q.astype(dtype=res_type, copy=False),
+        dpnp.triu(r).astype(dtype=res_type, copy=False),
+    )

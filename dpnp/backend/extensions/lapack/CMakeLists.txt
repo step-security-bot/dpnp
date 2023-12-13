@@ -30,6 +30,7 @@ set(_module_src
     ${CMAKE_CURRENT_SOURCE_DIR}/gesv.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geqrf.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/heevd.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/orgqr.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/syevd.cpp
 )
 
