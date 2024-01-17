@@ -115,6 +115,13 @@ def check_stacked_square(*arrays):
                 "Last 2 dimensions of the input array must be square"
             )
 
+def stacked_identity(batch_shape, n, dtype):
+    shape = batch_shape + (n, n)
+    idx = dpnp.arange(n)
+    x = dpnp.zeros(shape, dtype)
+    x[..., idx, idx] = 1
+    return x
+
 
 def _common_type(*arrays):
     """
@@ -434,6 +441,104 @@ def dpnp_solve(a, b):
 
         return b_f
 
+def dpnp_qr_batch(a, mode="reduced"):
+    """
+    dpnp_qr_batch(a, mode="reduced")
+
+    Return the qr factorization of `a` matrix.
+
+    """
+
+    a_sycl_queue = a.sycl_queue
+    a_usm_type = a.usm_type
+
+    m, n = a.shape[-2:]
+    k = min(m, n)
+
+    orig_shape = a.shape
+    batch_shape = a.shape[:-2]
+    # get 3d input arrays by reshape
+    a = a.reshape(-1, m, n)
+    batch_size = a.shape[0]
+    a_usm_arr = dpnp.get_usm_ndarray(a)
+
+    res_type = _common_type(a)
+
+    if batch_size == 0 or k == 0:
+        if mode == 'reduced':
+            return (dpnp.empty(batch_shape + (m, k), dtype=res_type),
+                    dpnp.empty(batch_shape + (k, n), dtype=res_type))
+        elif mode == 'complete':
+            q = stacked_identity(batch_shape, m, dtype=res_type)
+            return (q, dpnp.empty(batch_shape + (m, n), dtype=res_type))
+        elif mode == 'r':
+            return dpnp.empty(batch_shape + (k, n), dtype=res_type)
+        elif mode == 'raw':
+            return (dpnp.empty(batch_shape + (n, m), dtype=res_type),
+                    dpnp.empty(batch_shape + (k,), dtype=res_type))
+
+    a = a.swapaxes(-2, -1)
+    a_usm_arr = dpnp.get_usm_ndarray(a)
+
+    a_t = dpnp.empty_like(a, order="C", dtype=res_type, usm_type=a_usm_type)
+
+    # use DPCTL tensor function to fill the matrix array
+    # with content from the input array `a`
+    a_ht_copy_ev, a_copy_ev = ti._copy_usm_ndarray_into_usm_ndarray(
+        src=a_usm_arr, dst=a_t.get_array(), sycl_queue=a_sycl_queue
+    )
+
+    dtype = dpnp.default_float_type(a.sycl_device)
+
+    tau_h = dpnp.empty(
+        (batch_size, k), dtype=dtype, sycl_queue=a_sycl_queue, usm_type=a_usm_type
+    )
+
+    a_stride = a_t.strides[0]
+
+    # Call the LAPACK extension function _geqrf_batch to compute the QR factorization
+    # of a general m x n matrix.
+    ht_lapack_ev, geqrf_batch_ev = li._geqrf_batch(
+        a_sycl_queue, m, n, a_t.get_array(), tau_h.get_array(), a_stride, batch_size, [a_copy_ev]
+    )
+
+    ht_lapack_ev.wait()
+    a_ht_copy_ev.wait()
+
+    if mode == "r":
+        r = a_t[..., :k].swapaxes(-2,-1)
+        return dpnp.triu(r).astype(res_type, copy=False)
+
+    if mode == "raw":
+        return (
+            a_t.astype(res_type, copy=False),
+            tau_h.astype(res_type, copy=False),
+        )
+
+    if mode == "complete" and m > n:
+        mc = m
+        orig_n = m
+        q = dpnp.empty((batch_size, m, m), dtype=dtype)
+    else:
+        mc = k
+        orig_n = n
+        q = dpnp.empty((batch_size, n, m), dtype=dtype)
+    q[..., :n, :] = a_t
+
+    q_stride = q.strides[0]
+
+    # Call the LAPACK extension function _orgqr to generate the real orthogonal matrix
+    # `Q` of the QR factorization
+    ht_lapack_ev, _ = li._orgqr_batch(
+        a_sycl_queue, m, mc, k, q.get_array(), tau_h.get_array(), q_stride, batch_size, [geqrf_batch_ev]
+    )
+
+    q = q[..., :mc, :].swapaxes(-2, -1)
+    r = a_t[..., :mc].swapaxes(-2, -1)
+    return (
+        q.astype(dtype=res_type, copy=False),
+        dpnp.triu(r).astype(dtype=res_type, copy=False),
+    )
 
 def dpnp_qr(a, mode="reduced"):
     """
@@ -496,12 +601,14 @@ def dpnp_qr(a, mode="reduced"):
                 usm_type=a_usm_type,
             )
 
-    a_t = dpnp.empty_like(a.T, order="C", dtype=res_type, usm_type=a_usm_type)
+    a = a.T
+    a_usm_arr = dpnp.get_usm_ndarray(a)
+    a_t = dpnp.empty_like(a, order="C", dtype=res_type, usm_type=a_usm_type)
 
     # use DPCTL tensor function to fill the matrix array
     # with content from the input array `a`
     a_ht_copy_ev, a_copy_ev = ti._copy_usm_ndarray_into_usm_ndarray(
-        src=a_usm_arr, dst=a_t.T.get_array(), sycl_queue=a_sycl_queue
+        src=a_usm_arr, dst=a_t.get_array(), sycl_queue=a_sycl_queue
     )
 
     dtype = dpnp.default_float_type(a.sycl_device)
