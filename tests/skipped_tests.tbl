@@ -360,11 +360,7 @@ tests/third_party/cupy/linalg_tests/test_product.py::TestMatrixPower::test_matri
 tests/third_party/cupy/linalg_tests/test_product.py::TestMatrixPower::test_matrix_power_large
 tests/third_party/cupy/linalg_tests/test_product.py::TestMatrixPower::test_matrix_power_of_two
 tests/third_party/cupy/linalg_tests/test_product.py::TestProduct::test_multidim_vdot
-tests/third_party/cupy/linalg_tests/test_product.py::TestProduct::test_tensordot_zero_dim
 tests/third_party/cupy/linalg_tests/test_product.py::TestProduct::test_transposed_multidim_vdot
-tests/third_party/cupy/linalg_tests/test_product.py::TestProduct::test_transposed_tensordot
-tests/third_party/cupy/linalg_tests/test_product.py::TestProduct::test_transposed_tensordot_with_int_axes
-tests/third_party/cupy/linalg_tests/test_product.py::TestProduct::test_transposed_tensordot_with_list_axes
 tests/third_party/cupy/linalg_tests/test_product.py::TestProduct::test_reversed_vdot
 
 tests/third_party/cupy/logic_tests/test_comparison.py::TestArrayEqual::test_array_equal_broadcast_not_allowed
