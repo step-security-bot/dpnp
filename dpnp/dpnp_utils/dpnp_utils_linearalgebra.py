@@ -24,7 +24,9 @@
 # *****************************************************************************
 
 import dpctl
+import dpctl.tensor._tensor_elementwise_impl as tei
 import dpctl.tensor._tensor_impl as ti
+import dpctl.tensor._tensor_reductions_impl as tri
 import numpy
 
 import dpnp
@@ -215,10 +217,24 @@ def dpnp_dot(
         a, b, dtype=None, casting="no", sycl_queue=exec_q
     )
 
+    if dpnp.issubdtype(res_dtype, dpnp.inexact) or dpnp.issubdtype(
+        res_dtype, dpnp.bool
+    ):
+        tmp_dtype = dot_dtype
+    else:
+        tmp_dtype = res_dtype
+
     # create result array
     result = dpnp.empty(
         (),
-        dtype=dot_dtype,
+        dtype=tmp_dtype,
+        usm_type=res_usm_type,
+        sycl_queue=exec_q,
+    )
+
+    res_buf = dpnp.empty(
+        (a.shape),
+        dtype=tmp_dtype,
         usm_type=res_usm_type,
         sycl_queue=exec_q,
     )
@@ -226,26 +242,50 @@ def dpnp_dot(
     # input arrays should have the proper data type
     dep_events_list = []
     host_tasks_list = []
-    a = _copy_array(a, dep_events_list, host_tasks_list, dtype=dot_dtype)
-    b = _copy_array(b, dep_events_list, host_tasks_list, dtype=dot_dtype)
-
-    if dpnp.issubdtype(dot_dtype, dpnp.complexfloating):
-        ht_blas_ev, _ = bi._dotu(
-            exec_q,
-            dpnp.get_usm_ndarray(a),
-            dpnp.get_usm_ndarray(b),
-            dpnp.get_usm_ndarray(result),
-            dep_events_list,
-        )
+    if dpnp.issubdtype(res_dtype, dpnp.inexact) or dpnp.issubdtype(
+        res_dtype, dpnp.bool
+    ):
+        # copying is needed if input dtypes are different
+        a = _copy_array(a, dep_events_list, host_tasks_list, dtype=dot_dtype)
+        b = _copy_array(b, dep_events_list, host_tasks_list, dtype=dot_dtype)
+        if dpnp.issubdtype(res_dtype, dpnp.complexfloating):
+            ht_ev, _ = bi._dotu(
+                exec_q,
+                dpnp.get_usm_ndarray(a),
+                dpnp.get_usm_ndarray(b),
+                dpnp.get_usm_ndarray(result),
+                [],
+            )
+        else:
+            ht_ev, _ = bi._dot(
+                exec_q,
+                dpnp.get_usm_ndarray(a),
+                dpnp.get_usm_ndarray(b),
+                dpnp.get_usm_ndarray(result),
+                dep_events_list,
+            )
     else:
-        ht_blas_ev, _ = bi._dot(
-            exec_q,
-            dpnp.get_usm_ndarray(a),
-            dpnp.get_usm_ndarray(b),
-            dpnp.get_usm_ndarray(result),
-            dep_events_list,
+        # copying is needed if input dtypes are different
+        a = _copy_array(a, dep_events_list, host_tasks_list, dtype=res_dtype)
+        b = _copy_array(b, dep_events_list, host_tasks_list, dtype=res_dtype)
+        ht_multiply_ev, dev_multiply_ev = tei._multiply(
+            src1=dpnp.get_usm_ndarray(a),
+            src2=dpnp.get_usm_ndarray(b),
+            dst=dpnp.get_usm_ndarray(res_buf),
+            sycl_queue=exec_q,
+            depends=dep_events_list,
         )
-    host_tasks_list.append(ht_blas_ev)
+        dep_events_list.append(dev_multiply_ev)
+        host_tasks_list.append(ht_multiply_ev)
+        ht_ev, _ = tri._sum_over_axis(
+            src=dpnp.get_usm_ndarray(result),
+            trailing_dims_to_reduce=1,
+            dst=dpnp.get_usm_ndarray(result),
+            sycl_queue=exec_q,
+            depends=dep_events_list,
+        )
+
+    host_tasks_list.append(ht_ev)
     dpctl.SyclEvent.wait_for(host_tasks_list)
 
     if dot_dtype != res_dtype:
