@@ -255,6 +255,10 @@ def matmul(
     order="K",
     dtype=None,
     subok=True,
+    signature=None,
+    extobj=None,
+    axes=None,
+    axis=None,
 ):
     """
     Matrix product of two arrays.
@@ -265,7 +269,8 @@ def matmul(
     -----------
     Input arrays and parameter `out` are supported as either :class:`dpnp.ndarray`
     or :class:`dpctl.tensor.usm_ndarray`.
-    Keyword argument `subok` is currently unsupported.
+    Keyword arguments `subok`, `signature`, `extobj`, and `axis` are 
+    currently unsupported.
     Input array data types are limited by supported DPNP :ref:`Data types`.
 
     See Also
@@ -328,8 +333,29 @@ def matmul(
         raise NotImplementedError(
             "subok keyword argument is only supported by its default value."
         )
+    elif signature is not None:
+        raise NotImplementedError(
+            "signature keyword argument is only supported by its default value."
+        )
+    elif extobj is not None:
+        raise NotImplementedError(
+            "extobj keyword argument is only supported by its default value."
+        )    
+    elif axis is not None:
+        raise NotImplementedError(
+            "axis keyword argument is only supported by its default value."
+        )           
     else:
-        return dpnp_matmul(
+        if axes is not None:
+            # check axes is valid
+            axes_x1, axes_x2, axes_res = axes
+            x1 = dpnp.moveaxis(x1, axes_x1, (-2, -1))
+            x2 = dpnp.moveaxis(x2, axes_x2, (-2, -1))
+            out_orig = out
+            if out is not None:
+                out = None
+
+        result = dpnp_matmul(
             x1,
             x2,
             out=out,
@@ -337,6 +363,12 @@ def matmul(
             order=order,
             dtype=dtype,
         )
+        if axes is not None:        
+            result = dpnp.moveaxis(result, (-2, -1), axes_res)
+            if out_orig is not None:
+                return dpnp.get_result_array(result, out_orig, casting=casting)
+            
+        return result
 
 
 def outer(x1, x2, out=None):

@@ -106,17 +106,29 @@ def _gemm_batch_matmul(exec_q, x1, x2, res, x1_is_2D, x2_is_2D, dev_tasks_list):
     # the stride along that dimension is not a
     # meaningful number and is undefined. Here, we
     # standardizing strides before continuing,
-    # setting stride to 0 if the shape along that axis is <=1
-    if x1_is_2D:
+    # for inherently 2D arrays setting stride to 0,
+    # for this special case and for other type of arrays
+    # otherwise, using the non-zero value for strides
+    # along such an axis
+    if x1_is_2D:  
         x1_strides = tuple(
             str_i if sh_i > 1 else 0
             for sh_i, str_i in zip(x1.shape, x1_strides)
         )
-    if x2_is_2D:
+    else:  
+        str_x1 = [numpy.prod(x1.shape[i+1:]) if x1_strides[i] == 0 else x1_strides[i] for i in range(x1.ndim-1)]
+        str_x1.append(1 if x1_strides[x1.ndim-1] == 0 else x1_strides[x1.ndim-1])
+        x1_strides = tuple(str_x1)
+
+    if x2_is_2D:  
         x2_strides = tuple(
             str_i if sh_i > 1 else 0
             for sh_i, str_i in zip(x2.shape, x2_strides)
         )
+    else:  
+        str_x2 = [numpy.prod(x2.shape[i+1:]) if x2_strides[i] == 0 else x2_strides[i] for i in range(x2.ndim-1)]
+        str_x2.append(1 if x2_strides[x2.ndim-1] == 0 else x2_strides[x2.ndim-1])
+        x2_strides = tuple(str_x2)        
 
     batch_size = res.shape[:-2][0]
     stridea = x1_strides[0]
@@ -276,11 +288,11 @@ def dpnp_matmul(
                     # If the `x1` array is inherently 2D, there's no need to
                     # duplicate the data for the 1-D dimension;
                     # GEMM handles it automatically.
-                    if not x1_is_2D:
+                    if not x1_is_2D:  
                         x1 = dpnp.repeat(x1, x2_shape[i], axis=i)
                 elif x2_shape[i] == 1:
                     tmp_shape[i] = x1_shape[i]
-                    if not x2_is_2D:
+                    if not x2_is_2D: 
                         x2 = dpnp.repeat(x2, x1_shape[i], axis=i)
                 else:
                     raise ValueError(
