@@ -25,17 +25,17 @@ jobs:
 
     steps:
       - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.12.0
+        uses: styfle/cancel-workflow-action@01ce38bf961b4e243a6342cbade0dbc8ba3f0432 # 0.12.0
         with:
           access_token: ${{ github.token }}
 
       - name: Checkout repo
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           fetch-depth: 0
 
       - name: Setup miniconda
-        uses: conda-incubator/setup-miniconda@v3.0.1
+        uses: conda-incubator/setup-miniconda@11b562958363ec5770fef326fe8ef0366f8cbf8a # v3.0.1
         with:
           auto-update-conda: true
           python-version: ${{ env.python-ver }}
@@ -60,7 +60,7 @@ jobs:
 
       - name: Build dpnp with coverage
         id: build_coverage
-        uses: nick-fields/retry@v2.9.0
+        uses: nick-fields/retry@14672906e672a08bd6eeb15720e9ed3ce869cdd4 # v2.9.0
         with:
           shell: bash
           timeout_minutes: 60
